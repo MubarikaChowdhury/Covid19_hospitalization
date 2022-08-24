@@ -1,0 +1,198 @@
+---
+title: 'PHC 6701: Project 2'
+author:
+- Prepared By
+- Sultana Mubarika Rahman Chowdhury
+- Said Shabani Salehe
+- Srijana Acharya Gautum
+date: '2022-07-29'
+output:
+  word_document: default
+  html_document:
+    df_print: paged
+subtitle: R Markdown Report and ggplot Graphics For COVID19 Hospitilization
+toc: yes
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = FALSE,
+  warning = FALSE,
+  message = FALSE,
+  eval = TRUE,
+  fig.width = 8,
+  fig.height = 6,
+  dpi = 720)
+```
+
+
+
+# Introduction 
+
+COVID – 19 pandemics have been ravaging the world since December 2019. This pandemic is caused by new virus known as Severe Acute Respiratory Syndrome –Coronavirus 2. With its severe clinical manifestations in vital systems like respiratory, cardiovascular, and neurological, also, in gastrointestinal and musculoskeletal system, this pandemic has threatened existing health care system. Moreover, throughout this pandemic, SARS-cov2 virus continued to mutate and challenged the healthcare strategies like vaccinations’ effectiveness, medicines’ efficacy, and clinical management plans pushing hospital’s capacity to its limit. One of the measures to keep pandemics under control and to maintain people’s psychological immunity, is to have a sufficient health care system. One of the approaches to strategize healthcare systems is to closely monitor hospital admission trends. On the other hand, due to the rapidly changing nature of Covid-19 virus, it is very much essential to keep track of which variant is causing hospitalization, to correctly address the pandemic. As per CDC (Centers for Disease Control) 2022, SARS-cov2 mutated into different forms, namely, alpha-variant, delta variant and Omnicron. Worldometer data as updated in July 2022, shows that United States is the most affected country with Florida state ranking third to be impacted by Covid-19. Among hundreds of mutants, On June 15, 2021, CDC had declared delta variant as variant of concern in US, while same year on November, CDC classified another variant, Omnicron as variant of concern in US. The latest data from CDC shows that due to emergence of Omnicron virus, incident cases, hospitalizations and deaths cases are increasing across the nation. With this we can hypothesize that people have developed resistance against earlier variant; delta virus, either due to vaccination or due to natural immune response. In this report we are focusing on how delta variant continued to impact in hospitalization in three different counties of Florida namely Miami-Dade, Palm Beach and Broward and we hypothesize that hospital admissions due to delta variant follow decreasing trend along the time in all above three counties.
+
+
+
+## Project Introduction
+
+The aim of this project was to apply the skills learned in advanced r programming class to acquire, process, and communicate COVID-19 data for three Florida Counties namely Miami-Dade, Palm Beach, and  Broward.  The source data used in the report are housed in the GitHub account 
+
+
+## Packages Used In This Project
+
+To attain the aim of this project, we had to download 385 individual excel files from GitHub <https://github.com/annyrodriguez/COVIDProject> and add newly published data by the Center for Disease Control and Prevention (CDC) and wrangled them to obtain tidy data for analysis. We largely used tidyverse packages - dplyr, purrr, stringr, and ggplot2 for data wrangling and piloting. The package readxl was very handy in reading and extracting information from individual excel sheets. Also, we used used lubridate package to manipulate and process date information.  
+
+```{r, loading-packages}
+# install.packages("purrr")
+# install.packages ("readxl")
+# install.packages("tidyverse")
+
+library(purrr)
+library(readxl)
+library(lubridate)
+library(stringr)
+library(tidyverse)
+```
+
+```{r, create-data-path-file}
+data_file_char <- list.files(
+  "data_CDC_raw/",
+  pattern = ".xlsx")
+
+data_path_char <- paste0("data_CDC_raw/", data_file_char)
+
+```
+
+```{r, function-for-import}
+# FIPScode for Florida is 12; Miami Dade County is 086; Broward County is 011, Palm beach County is 099.  
+
+import_multiple_data <- 
+  function(
+    file_path_char, 
+    sheetname = "Counties",
+    FIPScode_int = c(12086,12011,12099)) {
+  
+out_df <- 
+  readxl::read_xlsx(
+    path = file_path_char, 
+    sheet = sheetname, 
+    skip = 1
+  ) %>%
+filter(`FIPS code` %in% FIPScode_int) 
+
+# We assume that the date is in format YYYYMMDD
+out_df$Date <- ymd(str_extract(file_path_char, pattern = "\\d{8}"))
+out_df
+  }
+```
+
+```{r, extracting-data}
+hospitalization_ls <-  
+  map(
+  .x = data_path_char,
+  .f = import_multiple_data
+  ) %>% 
+  map(function(x) mutate (x, across(`FEMA region`,as.double))) %>% 
+  bind_rows() 
+
+hospitalization_ls <- 
+  hospitalization_ls %>% 
+  select(
+    'Date',
+    'County',
+    '% inpatient beds occupied by COVID-19 patient',
+    'Total inpatient beds among hospitals reporting - last 7 days'
+  )
+
+```
+
+```{r, data-cheking, eval=FALSE}
+# Checking whether all variables are present or not available
+sum(
+  is.na(
+    hospitalization_ls$`Total inpatient beds among hospitals reporting - last 7 days`
+  )
+) %>% 
+  table()
+
+sum(
+  is.na(
+    hospitalization_ls$`% inpatient beds occupied by COVID-19 patient`
+  )
+) %>% 
+  table()
+
+is.na(
+  hospitalization_ls$`% inpatient beds occupied by COVID-19 patient`
+) %>% 
+  table()
+
+is.na(
+  hospitalization_ls$`Total inpatient beds among hospitals reporting - last 7 days`
+) %>% 
+  table()
+```
+
+```{r, merging-data}
+hospitalization_full_ls <- 
+
+hospitalization_ls %>% 
+  rename(
+    "total_beds" = "Total inpatient beds among hospitals reporting - last 7 days",
+    "percentage_of_beds_occupied_by_covid19_patients" = "% inpatient beds occupied by COVID-19 patient") %>% 
+    mutate(
+      number_of_patients_hospitalized = percentage_of_beds_occupied_by_covid19_patients*total_beds
+    ) %>%
+    select('Date', 
+           'County',
+           'total_beds', 
+           'percentage_of_beds_occupied_by_covid19_patients', 
+           'number_of_patients_hospitalized'
+    )
+
+```
+
+
+
+# COVID-19 Hospitilization Trend in Florida
+
+COVID-19 have debilitated health care system around the world and resulted into loos of lives. The novelty nature of the virus causing COVID-19 made it difficult to deal with as healthcare system were caught off guard. Thus, shortage of hospital needs and supplies during COVID-19 pandemic has been a common phenomena. As a result, better planning and preparation are ultimately needing to curd current and future hospital demands related to COVID-19. One of the critical information needed to inform resource allocation for COPVID-19 is the trend of COVID-19 hospitalization rate. We need to know the trend of COVID-19 hospitalization in order to plan and allocate hospital supplies for COVID-19 care delivery and for the hospital staffs. We aimed to generate the COVID-19 hospitalization trend for three counties in Florida namely Miami-Dade, Palm Beach, and Broward. 
+
+The plot below show the hospitalization trend of COVID-19 cases in Miami-Dade, Palm Beach, and Broward counties from January 8th 2021 to July 21st 2022. 
+
+
+
+```{r, hospitilization_plot}
+hospitalization_plot <- 
+  hospitalization_full_ls %>%
+  
+  ggplot() +
+  
+  aes(
+    x = Date,
+    y = number_of_patients_hospitalized,
+    color = County
+  ) +
+  theme_gray() +
+  
+  labs(
+   title = "Covid-19 hospitalization trend in Florida",
+   x = "Date",
+   y = "Hospitalization Rate"
+  )  +
+  
+  geom_line()
+  
+ 
+hospitalization_plot
+```
+
+Figure 1: COVID-19 Hospitalization Trend Fro Miami-Dade, Plam Beach, and Broward Counties Between Jan 2021 and July 2022. Counties are represented by colored lines. 
+
+
+From the plot, COVID-19 hospitalization rates have several up and down phases. During the earlier months of 2020 hospitalization rates were decreasing in all three counties. The creasing trend in COVID-19 hospitalization rates in these three countries in earlier month's of 2021 can be attributed to strengthened preventive measures like social distancing, travel restriction, mask wearing, and the beginning of availability of COVID-19 vaccine.   
+
+In all counties, COVID-19 hospitalization spiked between July to September 2021. This spike can be attributed to impact of summer on COVID-19 transmission rate. In the summer of 2021, COVID-19 restrictions were relaxed a bit and people traveled and went outdoors and gathered in events. The relaxed summer increased COVID-19 transmission and ultimately hospitalization rates. The plot also, depict the second spike in COVID-19 hospitalization rate between January and February 2022 in all three counties. This spike was largely driven by the spread on new COVID-19 variant - Omicron which resulted into 948% increase in COVID-19 cases in state of Florida <https://www.theguardian.com/us-news/2022/jan/03/us-covid-omicron-coronavirus-cases-florida>. The increased COVID-19 transmission rate resulted into increased COVID-19 hospitalization rate in Florida as the depicted by the three counties. Furthermore, there is a trend on increasing rate of COVID-19 hospitalization rate in July 2022 possibly due to increased travel and outdoor activities in summer 2022. Another interesting observation is that throughout the observation period Miami-Dade county has the higher COVID-19 hospitalization rate than other two counties. This can be attributed to the county's population size. Miami-Dade country has large population size followed by Broward, and Plam Beach. 
+
+COVID-19 hospitalization rate is an important metric with huge public health implication. COVID-19 hospitalization trend is used for planning for health care delivery. For example, since COVID-19 Hospitalization rate spike during summer measures can be taken to reduce transmission and plan to accommodate more patients than normal. Although we only looked at general COVID-19 hospitalization trend, it can be stratified by different demographic and investigate which group makes up the bulk of COVID-19 hospitalization cases.  
+
